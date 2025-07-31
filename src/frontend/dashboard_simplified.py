@@ -856,7 +856,14 @@ class AirPollutionDashboard:
     def plot_by_pollutant_with_history(
         self, df_predictions, df_historical=None
     ):  # noqa: C901
-        """Plot each pollutant separately with multiple stations combined on the same panel"""
+        """Plot each pollutant separately with multiple stations combined on the same panel, with dangerous level lines."""
+
+        # Dangerous level thresholds (EU/WHO guidelines, can be adjusted)
+        pollutant_thresholds = {
+            "Nitrogen dioxide": 10,  # μg/m³, 1-year mean (WHO)
+            "PM10": 15,  # μg/m³, 24-year mean (WHO)
+            "PM2.5": 5,  # μg/m³, 24-year mean (WHO)
+        }
 
         # Get all pollutants from both datasets
         pollutants = set(df_predictions["pollutant"].unique())
@@ -866,10 +873,7 @@ class AirPollutionDashboard:
         # Color palette for stations
         station_colors = px.colors.qualitative.Set1
 
-        # print(pollutants)
-
         for pollutant in sorted(pollutants, reverse=True):
-            # print("Plotting pollutant:", pollutant)
             st.subheader(f"🌫️ {pollutant} - All Stations")
 
             fig = go.Figure()
@@ -946,7 +950,25 @@ class AirPollutionDashboard:
                             )
                         )
 
-            # Add prediction start line with error handling
+            # Add dangerous level line if threshold is defined
+            threshold = None
+            # Accept both "PM10" and "Particulate matter < 10 µm" as keys
+            if pollutant in pollutant_thresholds:
+                threshold = pollutant_thresholds[pollutant]
+            elif "PM10" in pollutant and "PM10" in pollutant_thresholds:
+                threshold = pollutant_thresholds["PM10"]
+            elif "PM2.5" in pollutant and "PM2.5" in pollutant_thresholds:
+                threshold = pollutant_thresholds["PM2.5"]
+
+            if threshold is not None:
+                fig.add_hline(
+                    y=threshold,
+                    line_dash="dot",
+                    line_color="red",
+                    annotation_text="Safe Level",
+                    annotation_position="top right",
+                    annotation_font_color="red",
+                )
 
             fig.update_layout(
                 title=f"{pollutant} - All Monitoring Stations",
@@ -959,11 +981,7 @@ class AirPollutionDashboard:
                 ),
             )
 
-            # print(f"Plotting {pollutant} for {len(all_stations)} stations end")
-
             st.plotly_chart(fig, use_container_width=True)
-
-            # print(f"Plotting {pollutant} for {len(all_stations)} stations end")
 
             # Show station summary for this pollutant
             if not df_predictions.empty:
@@ -973,13 +991,10 @@ class AirPollutionDashboard:
                 summary_data = []
 
                 for station in all_stations:
-                    # print(f"Processing station: {station} for pollutant: {pollutant}")
                     pred_station_data = df_predictions[
                         (df_predictions["pollutant"] == pollutant)
                         & (df_predictions["station"] == station)
                     ]
-
-                    # print(f"Processing station: {station} for pollutant: {pollutant}")
 
                     if not pred_station_data.empty:
                         avg_pred = pred_station_data["value"].mean()

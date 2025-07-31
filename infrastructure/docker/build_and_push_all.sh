@@ -6,10 +6,10 @@ set -e
 
 REGION="eu-west-1"
 ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-REPOS=(mlflow train predict dashboard api)
-#REPOS=(dashboard)
-DOCKERFILES=(Dockerfile.mlflow Dockerfile.train Dockerfile.predict Dockerfile.dashboard Dockerfile.api)
-#DOCKERFILES=(Dockerfile.dashboard)
+#REPOS=(mlflow train predict dashboard api)
+REPOS=(dashboard)
+#DOCKERFILES=(Dockerfile.mlflow Dockerfile.train Dockerfile.predict Dockerfile.dashboard Dockerfile.api)
+DOCKERFILES=(Dockerfile.dashboard)
 
 # 1. Create ECR repositories if they don't exist
 echo "Creating ECR repositories if needed..."

@@ -2,6 +2,11 @@
 
 This project is an end-to-end MLOps pipeline for predicting air pollution indicators in Helsinki, Finland. It automates data collection, model training, deployment, and monitoring using AWS ECS Fargate, S3, RDS, CloudWatch, and more. Infrastructure is managed with Terraform.
 
+
+# Current working deployment
+
+[http://mlops-dashboard-alb-1768071366.eu-west-1.elb.amazonaws.com/](http://mlops-dashboard-alb-1768071366.eu-west-1.elb.amazonaws.com/)
+
 ---
 
 ## Table of Contents

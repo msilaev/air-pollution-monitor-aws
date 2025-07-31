@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import plotly.express as px
@@ -15,7 +16,11 @@ class AirPollutionDashboard:
     """Main dashboard class for air pollution prediction"""
 
     def __init__(self):
-        self.api_base_url = os.getenv("API_BASE_URL", "http://localhost:8000/api/v1")
+        self.api_base_url = os.getenv("API_BASE_URL")
+        if not self.api_base_url:
+            raise RuntimeError(
+                "API_BASE_URL environment variable must be set (e.g., to your ALB URL + /api/v1) for cloud deployment."
+            )
 
         # Station coordinates from your data collection
         self.station_coordinates = {
@@ -24,7 +29,6 @@ class AirPollutionDashboard:
             "Espoo Luukki": {"lat": 60.1625, "lon": 24.6683},
             "Helsinki Mannerheimintie": {"lat": 60.1699, "lon": 24.9384},
             "Vantaa Tikkurila Neilikkatie": {"lat": 60.2925, "lon": 25.0442},
-            "Helsinki Vartiokylä Huivipolku": {"lat": 60.2243, "lon": 25.1040},
             "Vantaa Kehä III Viinikkala": {"lat": 60.2708, "lon": 24.8875},
             "Helsinki Kustaa Vaasan tie": {"lat": 60.1985, "lon": 24.9675},
         }
@@ -114,7 +118,9 @@ class AirPollutionDashboard:
             latest_data[station] = {
                 "Latitude": coords["lat"],
                 "Longitude": coords["lon"],
-                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "Timestamp": datetime.now(ZoneInfo("Europe/Helsinki")).strftime(
+                    "%Y-%m-%d %H:%M:%S"
+                ),
                 "Nitrogen monoxide": f"{20 + hash(station) % 30:.1f}",
                 "Nitrogen dioxide": f"{15 + hash(station) % 25:.1f}",
                 "Particulate matter < 10 µm": f"{25 + hash(station) % 20:.1f}",
@@ -135,7 +141,7 @@ class AirPollutionDashboard:
         else:
             st.sidebar.error("❌ API is not accessible")
             st.error(
-                "❌ Cannot connect to API. Please ensure the FastAPI server is running on http://localhost:8000"
+                f"❌ Cannot connect to API. Please ensure the FastAPI server is running {self.api_base_url}."
             )
             return
 
@@ -200,8 +206,8 @@ class AirPollutionDashboard:
             st.subheader("📈 Prediction Visualization")
             self.plot_predictions(predictions)
             # Show raw data in expander
-            with st.expander("🔍 Raw Prediction Data"):
-                st.json(predictions)
+            # with st.expander("🔍 Raw Prediction Data"):
+            #    st.json(predictions)
         else:
             st.warning(
                 "No predictions available. Scheduled prediction job may not have run yet."
@@ -212,7 +218,7 @@ class AirPollutionDashboard:
 
     def create_sample_prediction_data(self):
         """Create sample prediction data matching the real API format"""
-        base_time = datetime.now()
+        base_time = datetime.now(ZoneInfo("Europe/Helsinki"))
 
         # Create sample data matching the real API format (pollutant_station as key)
         sample_predictions = {}
@@ -552,7 +558,9 @@ class AirPollutionDashboard:
 
         with col2:
             if st.button("🔄 Refresh Station Data", type="secondary"):
-                st.session_state["station_data_refreshed"] = datetime.now()
+                st.session_state["station_data_refreshed"] = datetime.now(
+                    ZoneInfo("Europe/Helsinki")
+                )
 
         # Get latest station data
         station_data = self.get_latest_station_data()
@@ -588,7 +596,8 @@ class AirPollutionDashboard:
         predictions = predictions_data["predictions"]
         historical_data = predictions_data.get("historical_data", {})
         prediction_timestamp = predictions_data.get(
-            "prediction_timestamp", datetime.now().isoformat()
+            "prediction_timestamp",
+            datetime.now(ZoneInfo("Europe/Helsinki")).isoformat(),
         )
 
         st.info(
@@ -735,56 +744,6 @@ class AirPollutionDashboard:
             else:
                 self.plot_comparison_view_separate(df_predictions, df_historical)
 
-            # Summary statistics
-            self.show_enhanced_summary_separate(
-                df_predictions, df_historical, pd.to_datetime(prediction_timestamp)
-            )
-
-            # Data table
-            with st.expander("📋 Detailed Data Table"):
-                col1, col2 = st.columns(2)
-
-                with col1:
-                    st.write("**Predictions:**")
-                    display_pred = df_predictions.copy()
-                    display_pred["timestamp"] = display_pred["timestamp"].dt.strftime(
-                        "%Y-%m-%d %H:%M"
-                    )
-                    display_pred["value"] = display_pred["value"].round(2)
-                    # Show relevant columns
-                    # columns_to_show = ["timestamp", "pollutant", "station", "value"]
-                    # display_columns = [
-                    #    col for col in columns_to_show if col in display_pred.columns
-                    # ]
-                    # st.dataframe(
-                    #    display_pred[display_columns],
-                    #    use_container_width=True,
-                    #    # hide_index=True,
-                    # )
-
-                with col2:
-                    if df_historical is not None and not df_historical.empty:
-                        st.write("**Historical:**")
-                        display_hist = df_historical.copy()
-                        display_hist["timestamp"] = display_hist[
-                            "timestamp"
-                        ].dt.strftime("%Y-%m-%d %H:%M")
-                        display_hist["value"] = display_hist["value"].round(2)
-                        # Show relevant columns
-                        # columns_to_show = ["timestamp", "pollutant", "station", "value"]
-                        # display_columns = [
-                        #    col
-                        #    for col in columns_to_show
-                        #    if col in display_hist.columns
-                        # ]
-                        # st.dataframe(
-                        #     display_hist[display_columns],
-                        #     use_container_width=True
-                        #     #hide_index=True,
-                        # )
-                    else:
-                        st.write("**No historical data available**")
-
         except Exception as e:
             st.error(f"Error plotting predictions: {e}")
             with st.expander("🔍 Debug Information"):
@@ -864,22 +823,6 @@ class AirPollutionDashboard:
                             + "Value: %{y:.2f} μg/m³<extra></extra>",
                         )
                     )
-
-        # Add vertical line at prediction start with error handling
-        if not df_predictions.empty:
-            try:
-                # Ensure we get a proper Timestamp object
-                prediction_start = pd.Timestamp(df_predictions["timestamp"].iloc[0])
-                if pd.notna(prediction_start):
-                    fig.add_vline(
-                        x=prediction_start,
-                        line_dash="dot",
-                        line_color="red",
-                        annotation_text="Prediction Start",
-                        annotation_position="top",
-                    )
-            except Exception as e:
-                st.write(f"Warning: Could not add prediction start line: {e}")
 
         fig.update_layout(
             title="🌍 Air Pollution: All Pollutants & Stations",
@@ -1004,30 +947,6 @@ class AirPollutionDashboard:
                         )
 
             # Add prediction start line with error handling
-            if not df_predictions.empty:
-                try:
-                    # Use iloc[0] instead of min() to avoid timestamp arithmetic issues
-                    pollutant_data = df_predictions[
-                        df_predictions["pollutant"] == pollutant
-                    ]
-                    if not pollutant_data.empty:
-                        prediction_start = pd.Timestamp(
-                            pollutant_data["timestamp"].iloc[0]
-                        )
-                        if pd.notna(prediction_start):
-                            fig.add_vline(
-                                x=prediction_start,
-                                line_dash="dot",
-                                line_color="gray",
-                                annotation_text="Prediction Start",
-                                annotation_position="top",
-                            )
-                except Exception as e:
-                    st.write(
-                        f"Warning: Could not add prediction start line for {pollutant}: {e}"
-                    )
-
-            # print(f"Plotting {pollutant} for {len(all_stations)} stations")
 
             fig.update_layout(
                 title=f"{pollutant} - All Monitoring Stations",
@@ -1075,16 +994,6 @@ class AirPollutionDashboard:
                                 "Min Predicted": f"{min_pred:.1f}",
                             }
                         )
-
-                    # print(f"Processing station: {station} for pollutant: {pollutant} end")
-
-                if summary_data:
-                    pass
-                    # print(f"Adding summary for pollutant: {pollutant} start")
-                    # df_summary = pd.DataFrame(summary_data)
-                    # st.dataframe(df_summary, use_container_width=True, hide_index=True)
-                    # st.dataframe(df_summary, use_container_width=True)
-                    # print(f"Adding summary for pollutant: {pollutant} end")
 
     def plot_comparison_view_separate(self, df_predictions, df_historical):
         """Plot comparison between historical trends and predictions"""
@@ -1137,47 +1046,6 @@ class AirPollutionDashboard:
                     )
 
                     st.plotly_chart(fig, use_container_width=True)
-
-    def show_enhanced_summary_separate(
-        self, df_predictions, df_historical, prediction_timestamp
-    ):
-        """Show enhanced summary with separate DataFrames"""
-        st.subheader("📊 Enhanced Summary Statistics")
-
-        col1, col2, col3, col4 = st.columns(4)
-
-        # Pollutant-specific comparison table
-        if df_historical is not None and not df_historical.empty:
-            st.subheader("🌫️ Pollutant Comparison")
-
-            comparison_data = []
-            for pollutant in df_predictions["pollutant"].unique():
-                pred_stats = df_predictions[df_predictions["pollutant"] == pollutant][
-                    "value"
-                ]
-                hist_stats = df_historical[df_historical["pollutant"] == pollutant][
-                    "value"
-                ]
-
-                if not hist_stats.empty and not pred_stats.empty:
-                    comparison_data.append(
-                        {
-                            "Pollutant": pollutant,
-                            "Historical Avg": f"{hist_stats.mean():.1f}",
-                            "Predicted Avg": f"{pred_stats.mean():.1f}",
-                            "Change": f"{pred_stats.mean() - hist_stats.mean():+.1f}",
-                            "Change %": (
-                                f"{((pred_stats.mean() - hist_stats.mean()) / hist_stats.mean() * 100):+.1f}%"
-                                if hist_stats.mean() != 0
-                                else "N/A"
-                            ),
-                        }
-                    )
-
-            if comparison_data:
-                pass
-                # df_comparison = pd.DataFrame(comparison_data)
-                # st.dataframe(df_comparison, use_container_width=True) #, hide_index=True)
 
     def render_data_collection_tab(self):  # noqa: C901
         """Render data collection tab for training dataset creation"""

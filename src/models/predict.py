@@ -11,6 +11,9 @@ from src.models.pollution_predictor import PollutionPredictor
 
 logger = logging.getLogger(__name__)
 
+# Debug log for S3 bucket
+print("[DEBUG] AWS_S3_DATA_BUCKET:", os.environ.get("AWS_S3_DATA_BUCKET"))
+
 
 def upload_predictions_to_s3(prediction):
     """Upload DataFrame to S3 as parquet file"""
@@ -21,15 +24,10 @@ def upload_predictions_to_s3(prediction):
         s3_client = boto3.client("s3")
         s3_key = f"predictions/{predictions_filename}"
 
-        bucket = os.environ.get("AWS_S3_BUCKET_NAME", "air-pollution-models")
+        bucket = os.environ.get("AWS_S3_DATA_BUCKET")
+        if not bucket:
+            raise ValueError("AWS_S3_DATA_BUCKET environment variable is not set!")
         bucket = bucket.replace("s3://", "").strip()
-
-        # print(credentials.access_key, credentials.secret_key, credentials.token)
-        # print(f"Uploading data to s3://{bucket}/{key}")
-        # Convert DataFrame to parquet in memory
-        # buffer = io.BytesIO()
-        # df.to_parquet(buffer, index=False)
-        # buffer.seek(0)
 
         s3_client.put_object(
             Bucket=bucket,
@@ -60,7 +58,9 @@ def main():
         logger.info("Starting prediction")
         # Collect training data
         data_ingestion = DataIngestion(use_s3=USE_S3)
-        data_ingestion.fetch_pollution_data(chunk_size_hours=48, week_number=1)
+        data_ingestion.fetch_pollution_data(
+            chunk_size_hours=48, week_number=1, data_type="predicting"
+        )
 
         # Load and validate the data
         data_loader = DataLoader(use_s3=USE_S3)
@@ -96,7 +96,7 @@ def main():
             save_predictions_locally(prediction, local_file_path)
 
     except Exception as e:
-        logger.error(f"Error occurred during model training: {e}")
+        logger.error("Error occurred during model training: %s", e)
         raise e
 
 

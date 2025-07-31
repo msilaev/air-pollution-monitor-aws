@@ -14,7 +14,7 @@ class DataLoader:
         self.use_s3 = use_s3
         if use_s3:
             self.s3_client = boto3.client("s3")
-            self.bucket = os.environ.get("AWS_S3_BUCKET_NAME", "air-pollution-data")
+            self.bucket = os.environ.get("AWS_S3_DATA_BUCKET", "air-pollution-data")
             self.bucket = self.bucket.replace("s3://", "").strip()
         self.logger = logging.getLogger(__name__)
 

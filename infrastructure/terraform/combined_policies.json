@@ -1,0 +1,212 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Action": [
+        "ec2:*",
+        "elasticloadbalancing:*",
+        "cloudwatch:*",
+        "autoscaling:*"
+      ],
+      "Effect": "Allow",
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iam:CreateServiceLinkedRole",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "iam:AWSServiceName": [
+            "autoscaling.amazonaws.com",
+            "ec2scheduled.amazonaws.com",
+            "elasticloadbalancing.amazonaws.com",
+            "spot.amazonaws.com",
+            "spotfleet.amazonaws.com",
+            "transitgateway.amazonaws.com"
+          ]
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "application-autoscaling:*",
+        "appmesh:*",
+        "autoscaling:*",
+        "cloudformation:*",
+        "cloudwatch:*",
+        "codedeploy:*",
+        "ec2:*",
+        "ecs:*",
+        "elasticfilesystem:*",
+        "elasticloadbalancing:*",
+        "events:*",
+        "fsx:*",
+        "iam:List*",
+        "lambda:ListFunctions",
+        "logs:*",
+        "route53:*",
+        "servicediscovery:*",
+        "sns:ListTopics"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ssm:GetParameter",
+        "ssm:GetParameters",
+        "ssm:GetParametersByPath"
+      ],
+      "Resource": "arn:aws:ssm:*:*:parameter/aws/service/ecs*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ec2:DeleteInternetGateway",
+        "ec2:DeleteRoute",
+        "ec2:DeleteRouteTable",
+        "ec2:DeleteSecurityGroup"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringLike": {
+          "ec2:ResourceTag/aws:cloudformation:stack-name": "EC2ContainerService-*"
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "*",
+      "Condition": {
+        "StringLike": {
+          "iam:PassedToService": "ecs-tasks.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "cloudwatch:DescribeAlarmsForMetric",
+        "cloudwatch:GetMetricData",
+        "ec2:CreateNetworkInterface",
+        "ec2:DeleteNetworkInterface",
+        "ec2:Describe*",
+        "ec2:ModifyNetworkInterfaceAttribute",
+        "elasticfilesystem:*",
+        "kms:DescribeKey",
+        "kms:ListAliases"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iam:CreateServiceLinkedRole",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "iam:AWSServiceName": [
+            "elasticfilesystem.amazonaws.com"
+          ]
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": "arn:aws:iam::*:role/*",
+      "Condition": {
+        "StringLike": {
+          "iam:PassedToService": "elasticfilesystem.amazonaws.com"
+        }
+      }
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:*",
+        "s3-object-lambda:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "ecr:DescribeRepositories",
+        "logs:DescribeLogGroups",
+        "ec2:Describe*",
+        "events:ListTagsForResource",
+        "logs:ListTagsForResource",
+        "logs:DeleteLogGroup",
+        "logs:PutRetentionPolicy",
+        "servicediscovery:*",
+        "iam:CreatePolicyVersion"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "iam:PassRole",
+        "ecr:*",
+        "iam:GetPolicy",
+        "iam:GetPolicyVersion",
+        "iam:ListPolicyVersions",
+        "iam:DeletePolicy",
+        "iam:CreatePolicy",
+        "iam:ListAttachedRolePolicies",
+        "iam:DetachRolePolicy",
+        "iam:AttachRolePolicy"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "iam:PassRole",
+        "iam:DeleteRolePolicy",
+        "iam:GetRolePolicy",
+        "iam:AttachRolePolicy",
+        "iam:PutRolePolicy",
+        "iam:DeleteRole",
+        "iam:CreateRole",
+        "iam:GetRole",
+        "iam:ListRolePolicies",
+        "iam:ListAttachedRolePolicies",
+        "iam:ListInstanceProfilesForRole",
+        "iam:CreatePolicy",
+        "iam:ListPolicies",
+        "events:ListTagsForResource",
+        "events:PutRule",
+        "events:PutTargets",
+        "iam:GetPolicyVersion"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:ListTagsForResource",
+        "logs:DeleteLogGroup",
+        "logs:PutRetentionPolicy"
+      ],
+      "Resource": "arn:aws:logs:us-east-1:909251725488:log-group:/ecs/air-pollution-*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "rds:DescribeDBInstances",
+        "rds:CreateDBSubnetGroup",
+        "rds:AddTagsToResource",
+        "rds:ListTagsForResource",
+        "rds:DeleteDBSubnetGroup",
+        "rds:ModifyDBInstance",
+        "rds:CreateDBInstance"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

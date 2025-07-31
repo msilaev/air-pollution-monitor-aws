@@ -3,10 +3,11 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 import boto3
 from fastapi import APIRouter, HTTPException
-from mlflow import MlflowClient, set_tracking_uri
+from mlflow import MlflowClient
 
 from src.api.schemas import PredictionResponse
 from src.config import PREDICTIONS_DIR, USE_S3
@@ -21,7 +22,7 @@ if USE_S3:
 else:
     # Use local SQLite DB for MLflow
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "sqlite:///mlflow.db")
-set_tracking_uri(tracking_uri)
+# set_tracking_uri(tracking_uri)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -32,29 +33,29 @@ predictor.setup_mlflow()
 data_loader = DataLoader(use_s3=USE_S3)
 data_ingestion = DataIngestion(use_s3=USE_S3)
 
-# Try to load the latest model on startup
-# try:
-#     print("Attempting to load model on startup...")
-#     model_loaded = predictor.load_model_from_mlflow()
-#     if model_loaded:
-#         print("✅ Model loaded successfully on startup")
-#     else:
-#         print("⚠️ No model found on startup - will need to train first")
-# except Exception as e:
-#     print(f"⚠️ Failed to load model on startup: {e}")
-#     print("Model will need to be trained or loaded manually")
-
 
 # Add endpoint to serve latest predictions from S3 or local
 @router.get("/predictions/latest")
 async def get_latest_predictions():
     predictions_filename = "latest_predictions.json"
     if USE_S3:
-        s3_bucket = os.environ.get("AWS_S3_BUCKET_NAME", "air-pollution-models")
+        s3_bucket = os.environ.get("AWS_S3_DATA_BUCKET", "air-pollution-models")
+
         s3_key = f"predictions/{predictions_filename}"
+
+        # logger.info(f"Using S3 bucket: {s3_bucket}")
+
         s3_client = boto3.client("s3")
-        obj = s3_client.get_object(Bucket=s3_bucket, Key=s3_key)
-        predictions = json.loads(obj["Body"].read())
+        print(f"🔍 DEBUG: Loaded predictions from S3: {s3_bucket}, {s3_key}")
+
+        try:
+            obj = s3_client.get_object(Bucket=s3_bucket, Key=s3_key)
+
+            predictions = json.loads(obj["Body"].read())
+        except Exception as e:
+            print(
+                f"❌ ERROR: Failed to load predictions from S3: {e}, {s3_bucket}, {s3_key}"
+            )
     else:
         local_path = Path(PREDICTIONS_DIR) / predictions_filename
         with open(local_path, "r", encoding="utf-8") as f:
@@ -69,11 +70,11 @@ async def train_model():
         # Load training dataset and check if it exists
         try:
             df = data_loader.load_train_dataset()
-        except FileNotFoundError:
+        except FileNotFoundError as exc:
             raise HTTPException(
                 status_code=404,
                 detail="No training data available. Please ensure training data is properly loaded.",
-            )
+            ) from exc
 
         # Check if dataframe is empty or has insufficient data
         if df is None or df.empty:
@@ -94,15 +95,18 @@ async def train_model():
         # print(f"Loaded data with shape: {df.shape}")
 
         # Train the model
-        print("🔍 DEBUG: Starting model training")
+        # print("🔍 DEBUG: Starting model training")
         metrics = predictor.train(df)
 
-        logger.info(f"Model trained successfully at {datetime.now()}")
+        logger.info(
+            "Model trained successfully at %s",
+            datetime.now(ZoneInfo("Europe/Helsinki")),
+        )
         return metrics
 
     except Exception as e:
-        logger.error(f"Training failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Training failed: {str(e)}")
+        logger.error("Training failed: %s", str(e))
+        raise HTTPException(status_code=500, detail=f"Training failed: {str(e)}") from e
 
 
 @router.get("/predict", response_model=PredictionResponse)
@@ -131,7 +135,7 @@ async def predict_pollution(fetch_fresh_data: bool = False):  # noqa: C901
                 raise HTTPException(
                     status_code=404,
                     detail=f"No prediction data available and failed to fetch fresh data: {str(fetch_error)}",
-                )
+                ) from fetch_error
 
         # Check if dataframe is empty or has insufficient data
         if df is None or df.empty:
@@ -145,7 +149,9 @@ async def predict_pollution(fetch_fresh_data: bool = False):  # noqa: C901
         if len(df) < min_required_rows:
             raise HTTPException(
                 status_code=400,
-                detail=f"Insufficient data for predictions. Need at least {min_required_rows} rows, got {len(df)}. Please refresh the data.",
+                detail=f"Insufficient data for predictions."
+                f"Need at least {min_required_rows} rows, got {len(df)}."
+                f"Please refresh the data.",
             )
 
         # print(f"Loaded data with shape: {df.shape}")
@@ -163,6 +169,8 @@ async def predict_pollution(fetch_fresh_data: bool = False):  # noqa: C901
         prediction = predictor.predict(df)
 
         # logger.info(f"Generated prediction at {datetime.now()}")
+        # Change to Helsinki time if uncommented:
+        # logger.info(f"Generated prediction at {datetime.now(ZoneInfo('Europe/Helsinki'))}")
         return prediction
 
     except Exception as e:
@@ -186,7 +194,7 @@ async def refresh_prediction_data():
             "status": "success",
             "message": "Prediction data refreshed successfully",
             "data_shape": df.shape,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(ZoneInfo("Europe/Helsinki")).isoformat(),
         }
 
     except Exception as e:
@@ -348,7 +356,7 @@ async def list_mlflow_models():
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to list MLflow models: {str(e)}"
-        )
+        ) from e
 
 
 @router.post("/load_model/mlflow/{model_version}")
@@ -363,11 +371,11 @@ async def load_mlflow_model(model_version: str):
                 "status": "success",
                 "message": f"MLflow model version {model_version} loaded successfully",
                 "model_version": model_version,
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": datetime.now(ZoneInfo("Europe/Helsinki")).isoformat(),
             }
         else:
             raise HTTPException(status_code=500, detail="Failed to load model")
     except Exception as e:
         raise HTTPException(
             status_code=500, detail=f"Failed to load MLflow model: {str(e)}"
-        )
+        ) from e

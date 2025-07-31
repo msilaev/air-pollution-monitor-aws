@@ -1,4 +1,5 @@
 import logging
+import os
 
 from src.config import USE_S3
 from src.data.data_ingestion import DataIngestion
@@ -6,6 +7,9 @@ from src.data.data_loader import DataLoader
 from src.models.pollution_predictor import PollutionPredictor
 
 logger = logging.getLogger(__name__)
+
+# Debug log for S3 bucket
+print("[DEBUG] AWS_S3_DATA_BUCKET:", os.environ.get("AWS_S3_DATA_BUCKET"))
 
 
 def main():

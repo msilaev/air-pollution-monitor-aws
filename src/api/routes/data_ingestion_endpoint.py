@@ -1,5 +1,6 @@
 import logging
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 
@@ -37,7 +38,7 @@ async def collect_training_data(
         return {
             "status": "started",
             "message": f"Training data collection started for { week_number*chunk_size_hours} hours",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(ZoneInfo("Europe/Helsinki")).isoformat(),
         }
 
     except Exception as e:
@@ -74,7 +75,7 @@ async def collect_testing_data(
         return {
             "status": "started",
             "message": f"Testing data collection started for { week_number*chunk_size_hours} hours",
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": datetime.now(ZoneInfo("Europe/Helsinki")).isoformat(),
         }
 
     except Exception as e:

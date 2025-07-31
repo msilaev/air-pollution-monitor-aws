@@ -9,6 +9,7 @@ import mlflow
 import mlflow.sklearn
 import numpy as np
 import pandas as pd
+import pytz
 from mlflow.tracking import MlflowClient
 from sklearn.linear_model import Lasso
 from sklearn.metrics import mean_absolute_error, mean_squared_error
@@ -35,7 +36,7 @@ class PollutionPredictor:
 
         # AWS clients
         self.s3_client = boto3.client("s3")
-        self.s3_bucket = os.environ.get("AWS_S3_BUCKET_NAME", "air-pollution-models")
+        self.s3_bucket = os.environ.get("AWS_S3_DATA_BUCKET")
 
     def setup_mlflow(self):
         """Setup MLflow tracking URI and S3 endpoint if available"""
@@ -49,9 +50,9 @@ class PollutionPredictor:
             experiment = mlflow.get_experiment_by_name("Pollution Prediction")
 
             # Get S3 bucket name and construct proper S3 URI
-            s3_bucket = os.environ.get("AWS_S3_BUCKET_NAME")
-            if USE_S3 and s3_bucket:
-                artifact_location = f"s3://{s3_bucket}/air_pollution_prediction"
+            # s3_bucket = os.environ.get("AWS_S3_BUCKET_NAME")
+            if USE_S3 and self.s3_bucket:
+                artifact_location = f"s3://{self.s3_bucket}/air_pollution_prediction"
             else:
                 artifact_location = None  # Use default local artifact store
 
@@ -138,6 +139,8 @@ class PollutionPredictor:
         """Train model using your exact approach"""
         # print(f"Training model with data shape: {df.shape}")
 
+        print(len(df.columns))
+
         # Prepare sequences
         with mlflow.start_run() as run:
             print("🔍 DEBUG: Starting MLflow run for training")
@@ -212,7 +215,9 @@ class PollutionPredictor:
                     "features_pollution": self.features_pollution,
                     "features_additional": self.features_additional,
                     "model_type": "Lasso Regression with MultiOutput",
-                    "created_at": datetime.now().isoformat(),
+                    "created_at": datetime.now(
+                        pytz.timezone("Europe/Helsinki")
+                    ).isoformat(),
                 }
 
                 metadata_path = os.path.join(temp_dir, "model_metadata.json")
@@ -321,13 +326,15 @@ class PollutionPredictor:
     def predict(self, df, target_timestamp=None):
         """Make predictions for the next 6 hours"""
 
+        print(len(df.columns))
+
         if self.model is None:
             raise ValueError(
                 "Model is not loaded. Please load the model first using load_model_from_mlflow()"
             )
 
         if target_timestamp is None:
-            target_timestamp = datetime.now()
+            target_timestamp = datetime.now(pytz.timezone("Europe/Helsinki"))
 
         df_features = self.create_features(df)
 

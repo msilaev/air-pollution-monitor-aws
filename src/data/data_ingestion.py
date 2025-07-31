@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 import boto3
 import pandas as pd
@@ -41,7 +42,6 @@ class DataIngestion:
             "Espoo Luukki",
             "Helsinki Mannerheimintie",
             "Vantaa Tikkurila Neilikkatie",
-            "Helsinki Vartiokylä Huivipolku",
             "Vantaa Kehä III Viinikkala",
             "Helsinki Kustaa Vaasan tie",
         ]
@@ -65,12 +65,20 @@ class DataIngestion:
             air_pollution_total = {}
 
             for n in range(week_number):
-                start = dt.datetime.now() - (n + 1) * dt.timedelta(
-                    hours=chunk_size_hours
-                )
-                end = dt.datetime.now() - n * dt.timedelta(hours=chunk_size_hours)
+                # Get current UTC time and shift to Helsinki time
+                now_utc = dt.datetime.now(dt.timezone.utc)
+                now_hel = now_utc + dt.timedelta(hours=3)
 
-                print(f"Fetching data for {start} to {end}")
+                start = now_hel - (n + 1) * dt.timedelta(hours=chunk_size_hours)
+                end = now_hel - n * dt.timedelta(hours=chunk_size_hours)
+
+                start = start.replace(tzinfo=None)
+                # start = start.strftime('%Y-%m-%d %H:%M:%S.%f')
+
+                end = end.replace(tzinfo=None)
+                # end = end.strftime('%Y-%m-%d %H:%M:%S.%f')
+
+                print(f"Fetching data for {start.isoformat()} to {end.isoformat()}")
 
                 air_pollution_week = get_air_pollution_data_timeInterval(
                     latitude_city,
@@ -182,8 +190,10 @@ class DataIngestion:
         try:
             s3_client = boto3.client("s3")
 
-            bucket = os.environ.get("AWS_S3_BUCKET_NAME", "air-pollution-models")
+            bucket = os.environ.get("AWS_S3_DATA_BUCKET", "air-pollution-models")
             bucket = bucket.replace("s3://", "").strip()
+
+            print(f"Uploading data to s3://{bucket}/{key}")
 
             # print(credentials.access_key, credentials.secret_key, credentials.token)
             # print(f"Uploading data to s3://{bucket}/{key}")
@@ -283,7 +293,7 @@ class DataIngestion:
         os.makedirs(INTERIM_DATA_DIR, exist_ok=True)
 
         # Save with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        timestamp = datetime.now(ZoneInfo("Europe/Helsinki")).strftime("%Y%m%d_%H%M%S")
         filename = f"latest_pollution_data_{timestamp}.parquet"
         filepath = os.path.join(INTERIM_DATA_DIR, filename)
 

@@ -1,13 +1,3 @@
-## Environment Variables
-
-You must set the `API_BASE_URL` environment variable in your `.env` file or in your shell before running the dashboard or any API client. For example:
-
-```
-API_BASE_URL=http://localhost:8000/api/v1
-```
-For the AWS cloud deployment it is your ALB URL + `/api/v1`. It is fixed in terraform `/infrastructure/terraform/fargate.tf`.
-
-This is required for the dashboard and API to function correctly.
 # Air Pollution Prediction App (MLOps, AWS, Terraform)
 
 This project is an end-to-end MLOps pipeline for predicting air pollution indicators in Helsinki, Finland. It automates data collection, model training, deployment, and monitoring using AWS ECS Fargate, S3, RDS, CloudWatch, and more. Infrastructure is managed with Terraform.
@@ -128,7 +118,18 @@ git clone <repository-url>
 cd air_pollution_aws
 ```
 
-### 2. Create Virtual Environment
+### 2. Environment Variables
+
+You must set the `API_BASE_URL` environment variable in your `.env` file or in your shell before running the dashboard or any API client. For example:
+
+```
+API_BASE_URL=http://localhost:8000/api/v1
+```
+For the AWS cloud deployment it is your ALB URL + `/api/v1`. It is fixed in terraform `/infrastructure/terraform/fargate.tf`.
+
+This is required for the dashboard and API to function correctly.
+
+### 3. Create Virtual Environment
 ```bash
 python -m venv venv
 # Activate:
@@ -136,16 +137,16 @@ python -m venv venv
 # macOS/Linux: source venv/bin/activate
 ```
 
-### 3. Install Dependencies
+### 4. Install Dependencies
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Environment Configuration
+### 5. Environment Configuration
 - Set `USE_S3` in `src/config.py` to `True` or `False` as needed.
 - If using S3, create a `.env` file with your AWS and MLflow settings.
 
-### 5. Quick Start
+### 6. Quick Start
 ```bash
 python -m src.api.app
 streamlit run src/frontend/dashboard_simplified.py

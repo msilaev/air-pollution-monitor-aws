@@ -566,8 +566,8 @@ resource "aws_iam_role_policy" "eventbridge_ecs" {
 # Example: schedule train task every day at 2am UTC
 resource "aws_cloudwatch_event_rule" "train_schedule" {
   name                = "mlops-train-schedule"
-  // schedule_expression = "cron(0/10 * * * ? *)"
-  schedule_expression = "cron(0 21 ? * WED *)"
+  //schedule_expression = "cron(0/20 * * * ? *)"
+  schedule_expression = "cron(0 10 ? * THU *)"
 }
 
 resource "aws_cloudwatch_event_target" "train" {
@@ -591,8 +591,8 @@ resource "aws_cloudwatch_event_target" "train" {
 # Example: schedule predict task every day at 3am UTC
 resource "aws_cloudwatch_event_rule" "predict_schedule" {
   name                = "mlops-predict-schedule"
-  // schedule_expression = "cron(0/5 * * * ? *)"
-  schedule_expression = "cron(0 0,6,12,18 * * ? *)"
+  schedule_expression = "cron(0 * * * ? *)"
+  //schedule_expression = "cron(0 0,6,12,18 * * ? *)"
 }
 
 resource "aws_cloudwatch_event_target" "predict" {

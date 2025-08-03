@@ -139,7 +139,7 @@ class PollutionPredictor:
         """Train model using your exact approach"""
         # print(f"Training model with data shape: {df.shape}")
 
-        print(len(df.columns))
+        # print(len(df.columns))
 
         # Prepare sequences
         with mlflow.start_run() as run:
@@ -326,7 +326,7 @@ class PollutionPredictor:
     def predict(self, df, target_timestamp=None):
         """Make predictions for the next 6 hours"""
 
-        print(len(df.columns))
+        # print(len(df.columns))
 
         if self.model is None:
             raise ValueError(
@@ -396,35 +396,43 @@ class PollutionPredictor:
                 for j in range(self.n_steps)
             }
 
-        for i, feature in enumerate(self.features_pollution):
-            # Extract pollutant and station from feature name (e.g., "Nitrogen dioxide_Helsinki Kallio 2")
-            if "_" in feature:
-                parts = feature.split("_", 1)  # Split only on first underscore
-                pollutant = (
-                    parts[0].replace("Particulate matter < ", "PM").replace(" µm", "")
-                )
-                station = parts[1]
-                pollutant_station_key = f"{pollutant}_{station}"
-            else:
-                # Fallback if no underscore found
-                pollutant_station_key = feature.replace(
-                    "Particulate matter < ", "PM"
-                ).replace(" µm", "")
+            results["historical_data"][pollutant_station_key] = {
+                f"hour_{j+1}": {
+                    "value": float(historical_data[j, i]),
+                    "timestamp": pd.to_datetime(historical_timestamps[j]).isoformat(),
+                }
+                for j in range(self.training_hours)
+            }
 
-            results["historical_data"][pollutant_station_key] = []
+        # for i, feature in enumerate(self.features_pollution):
+        #     # Extract pollutant and station from feature name (e.g., "Nitrogen dioxide_Helsinki Kallio 2")
+        #     if "_" in feature:
+        #         parts = feature.split("_", 1)  # Split only on first underscore
+        #         pollutant = (
+        #             parts[0].replace("Particulate matter < ", "PM").replace(" µm", "")
+        #         )
+        #         station = parts[1]
+        #         pollutant_station_key = f"{pollutant}_{station}"
+        #     else:
+        #         # Fallback if no underscore found
+        #         pollutant_station_key = feature.replace(
+        #             "Particulate matter < ", "PM"
+        #         ).replace(" µm", "")
 
-            try:
-                for j in range(self.training_hours):
-                    ts = historical_timestamps[j]
-                    value = historical_data[j, i]
-                    results["historical_data"][pollutant_station_key].append(
-                        {
-                            "timestamp": pd.to_datetime(ts).isoformat(),
-                            "value": float(value),
-                        }
-                    )
-            except (IndexError, KeyError, ValueError):
-                # If there's an error with historical data for this feature, skip it
-                results["historical_data"][pollutant_station_key] = []
+        #     results["historical_data"][pollutant_station_key] = []
+
+        #     try:
+        #         for j in range(self.training_hours):
+        #             ts = historical_timestamps[j]
+        #             value = historical_data[j, i]
+        #             results["historical_data"][pollutant_station_key].append(
+        #                 {
+        #                     "timestamp": pd.to_datetime(ts).isoformat(),
+        #                     "value": float(value),
+        #                 }
+        #             )
+        #     except (IndexError, KeyError, ValueError):
+        #         # If there's an error with historical data for this feature, skip it
+        #         results["historical_data"][pollutant_station_key] = []
 
         return results

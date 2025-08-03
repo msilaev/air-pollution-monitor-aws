@@ -38,7 +38,7 @@ class AirPollutionDashboard:
         try:
             response = requests.get(f"{self.api_base_url}/health", timeout=5)
             return response.status_code == 200
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             st.write(f"🔍 DEBUG: API connection error: {e}")
             return False
 
@@ -48,7 +48,7 @@ class AirPollutionDashboard:
             response = requests.get(f"{self.api_base_url}/model/info")
             if response.status_code == 200:
                 return response.json()
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             st.write(f"🔍 DEBUG: Model info error: {e}")
         return None
 
@@ -57,7 +57,7 @@ class AirPollutionDashboard:
         try:
             response = requests.get(f"{self.api_base_url}/train")
             return response.json() if response.status_code == 200 else None
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             st.error(f"Training failed: {e}")
             return None
 
@@ -68,7 +68,7 @@ class AirPollutionDashboard:
             response = requests.get(url)
             if response.status_code == 200:
                 return response.json()
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             st.error(f"Prediction failed: {e}")
         return None
 
@@ -78,7 +78,7 @@ class AirPollutionDashboard:
             response = requests.get(f"{self.api_base_url}/data/status")
             if response.status_code == 200:
                 return response.json()
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             st.error(f"Failed to get data status: {e}")
         return None
 
@@ -87,7 +87,7 @@ class AirPollutionDashboard:
         try:
             response = requests.post(f"{self.api_base_url}/data/refresh")
             return response.json() if response.status_code == 200 else None
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             st.error(f"Data refresh failed: {e}")
         return None
 
@@ -103,7 +103,7 @@ class AirPollutionDashboard:
             }
             response = requests.get(url, params=params)
             return response.json() if response.status_code == 200 else None
-        except Exception as e:
+        except requests.exceptions.RequestException as e:
             st.error(f"Training data collection failed: {e}")
         return None
 
@@ -113,19 +113,57 @@ class AirPollutionDashboard:
 
     def get_latest_station_data(self):
         """Get latest data from all stations (simulated from your notebook logic)"""
+
+        fetch_data = self.get_predictions(fetch_fresh=False)
+        historical_data = fetch_data["historical_data"]
+        # historical_data = fetch_data.get("historical_data", {}) if fetch_data else {}
+        historical_df = self.parse_dict_to_df(historical_data)
+
+        # print("Historical DataFrame:", historical_df)
+        if historical_df.empty:
+            latest_data_df = None
+        else:
+            max_timestamp = historical_df["timestamp"].max()
+            latest_data_df = historical_df[historical_df["timestamp"] == max_timestamp]
+
+        # print("Latest Data:", latest_data_df)
         latest_data = {}
+
         for station, coords in self.station_coordinates.items():
-            latest_data[station] = {
-                "Latitude": coords["lat"],
-                "Longitude": coords["lon"],
-                "Timestamp": datetime.now(ZoneInfo("Europe/Helsinki")).strftime(
-                    "%Y-%m-%d %H:%M:%S"
-                ),
-                "Nitrogen monoxide": f"{20 + hash(station) % 30:.1f}",
-                "Nitrogen dioxide": f"{15 + hash(station) % 25:.1f}",
-                "Particulate matter < 10 µm": f"{25 + hash(station) % 20:.1f}",
-                "Particulate matter < 2.5 µm": f"{12 + hash(station) % 15:.1f}",
-            }
+            if latest_data_df is not None:
+                latest_data_station_df = latest_data_df[
+                    latest_data_df["station"] == station
+                ]
+
+                # print(latest_data_station_df["value"].unique())
+
+                # print(f"Latest data for {station}:", latest_data_station_df[latest_data_station_df['value']=="Nitrogen dioxide"])
+
+                latest_data[station] = {
+                    "Latitude": coords["lat"],
+                    "Longitude": coords["lon"],
+                    "Timestamp": latest_data_station_df["timestamp"].iloc[-1],
+                    "Nitrogen dioxide": latest_data_station_df[
+                        latest_data_station_df["pollutant"] == "Nitrogen dioxide"
+                    ]["value"].values[0],
+                    "Particulate matter < 10 µm": latest_data_station_df[
+                        latest_data_station_df["pollutant"] == "PM10"
+                    ]["value"].values[0],
+                    "Particulate matter < 2.5 µm": latest_data_station_df[
+                        latest_data_station_df["pollutant"] == "PM2.5"
+                    ]["value"].values[0],
+                }
+            else:
+                latest_data[station] = {
+                    "Latitude": coords["lat"],
+                    "Longitude": coords["lon"],
+                    "Timestamp": None,
+                    "Nitrogen dioxide": None,
+                    "Particulate matter < 10 µm": None,
+                    "Particulate matter < 2.5 µm": None,
+                }
+
+        # print("Latest Data:", latest_data)
         return latest_data
 
     def render_dashboard(self):
@@ -424,7 +462,7 @@ class AirPollutionDashboard:
 
                             dt = datetime.datetime.fromtimestamp(creation_time / 1000)
                             st.write(f"**Created:** {dt.strftime('%Y-%m-%d %H:%M')}")
-                        except Exception as e:
+                        except (ValueError, OSError, TypeError) as e:
                             st.write(f"**Created:** {creation_time}")
                             print(f"Error parsing creation time: {e}")
             # Performance Interpretation
@@ -487,6 +525,7 @@ class AirPollutionDashboard:
 
         # Prepare data for plotting
         map_data = []
+
         for station_name, info in station_data.items():
             pm10_value = float(info.get("Particulate matter < 10 µm", 25))
             pm25_value = float(info.get("Particulate matter < 2.5 µm", 15))
@@ -585,29 +624,15 @@ class AirPollutionDashboard:
             ) / len(station_data)
             st.metric("Avg PM10", f"{avg_pm10:.1f} μg/m³")
 
-    # PREDICTION PLOTTING FUNCTIONS
-    def plot_predictions(self, predictions_data):  # noqa: C901
-        """Create prediction plots with historical context"""
+    # PREDICTIONS AND HISTORY DICT TO DF
+    def parse_dict_to_df(self, data_dict):
+        """Convert nested dictionary to DataFrame"""
 
-        if not predictions_data or "predictions" not in predictions_data:
-            st.error("No prediction data available")
-            return
-
-        predictions = predictions_data["predictions"]
-        historical_data = predictions_data.get("historical_data", {})
-        prediction_timestamp = predictions_data.get(
-            "prediction_timestamp",
-            datetime.now(ZoneInfo("Europe/Helsinki")).isoformat(),
-        )
-
-        st.info(
-            f"🕐 Predictions generated at: {pd.to_datetime(prediction_timestamp).strftime('%Y-%m-%d %H:%M:%S')}"
-        )
-
+        parsed_data = []
         try:
             # Parse predictions into DataFrame
-            predicted_data = []
-            for pollutant_station_key, hourly_data in predictions.items():
+
+            for pollutant_station_key, hourly_data in data_dict.items():
                 # Parse pollutant and station from the key (format: "Pollutant_Station")
                 if "_" in pollutant_station_key:
                     parts = pollutant_station_key.split(
@@ -620,8 +645,10 @@ class AirPollutionDashboard:
                     pollutant = pollutant_station_key
                     station = "Unknown Station"
 
+                # print("Hourly Data:", hourly_data)
+
                 for hour_key, prediction_info in hourly_data.items():
-                    predicted_data.append(
+                    parsed_data.append(
                         {
                             "timestamp": prediction_info["timestamp"],
                             "pollutant": pollutant,
@@ -631,106 +658,174 @@ class AirPollutionDashboard:
                         }
                     )
 
-            df_predictions = pd.DataFrame(predicted_data)
+            df_parsed = pd.DataFrame(parsed_data)
 
-            # Parse historical data into DataFrame
-            df_historical = None
-            if historical_data:
-                historical_parsed = []
-                for pollutant_station_key, data_points in historical_data.items():
-                    # Parse pollutant and station from the key
-                    if "_" in pollutant_station_key:
-                        parts = pollutant_station_key.split("_", 1)
-                        pollutant = parts[0]
-                        station = parts[1]
-                    else:
-                        # If no station in key, this might be historical data without station names
-                        pollutant = pollutant_station_key
-                        # Try to infer station from prediction data structure
-                        station = "Helsinki Kallio 2"  # Default to first station
+            df_parsed["timestamp"] = pd.to_datetime(
+                df_parsed["timestamp"], errors="coerce"
+            )
+            # Remove any rows with invalid timestamps
+            df_parsed = df_parsed.dropna(subset=["timestamp"])
+            df_parsed = df_parsed.sort_values("timestamp")
 
-                    for data_point in data_points:
-                        historical_parsed.append(
-                            {
-                                "timestamp": data_point["timestamp"],
-                                "pollutant": pollutant,
-                                "value": data_point["value"],
-                                "station": station,
-                            }
-                        )
+        except (KeyError, TypeError, ValueError) as e:
+            st.error(f"Error parsing predictions: {e}")
+            with st.expander("🔍 Debug Information"):
+                st.write("Exception details:", str(e))
 
-                if historical_parsed:
-                    df_historical = pd.DataFrame(historical_parsed)
-                    # Fix timestamp conversion with error handling
-                    try:
-                        df_historical["timestamp"] = pd.to_datetime(
-                            df_historical["timestamp"], errors="coerce"
-                        )
-                        # Remove any rows with invalid timestamps
-                        df_historical = df_historical.dropna(subset=["timestamp"])
-                    except Exception as e:
-                        st.warning(f"Issue with historical timestamp conversion: {e}")
-                        df_historical = None
+        return df_parsed
 
-            if df_predictions.empty:
-                st.error("No prediction data to plot")
-                return
+    # PREDICTION PLOTTING FUNCTIONS
+    def plot_predictions(self, predictions_data):  # noqa: C901
+        """Create prediction plots with historical context"""
 
-            # Convert timestamp to datetime with error handling
-            try:
-                df_predictions["timestamp"] = pd.to_datetime(
-                    df_predictions["timestamp"], errors="coerce"
-                )
-                # Remove any rows with invalid timestamps
-                df_predictions = df_predictions.dropna(subset=["timestamp"])
-                df_predictions = df_predictions.sort_values("timestamp")
-            except Exception as e:
-                st.error(f"Error converting prediction timestamps: {e}")
-                return
+        if not predictions_data or "predictions" not in predictions_data:
+            st.error("No prediction data available")
+            return
 
-            if df_predictions.empty:
-                st.error("No valid prediction data after timestamp conversion")
-                return
+        predictions = predictions_data["predictions"]
+        historical_data = predictions_data["historical_data"]
+        prediction_timestamp = datetime.now(ZoneInfo("Europe/Helsinki")).isoformat()
 
-            # Show overview
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                historical_count = (
-                    len(df_historical) if df_historical is not None else 0
-                )
-                st.metric("📈 Historical Points", historical_count)
-            with col2:
-                predicted_count = len(df_predictions)
-                st.metric("🔮 Predicted Points", predicted_count)
-            with col3:
-                pollutant_count = df_predictions["pollutant"].nunique()
-                st.metric("🌫️ Pollutants", pollutant_count)
-            with col4:
-                station_count = (
-                    df_predictions["station"].nunique()
-                    if "station" in df_predictions.columns
-                    else 1
-                )
-                st.metric("🏢 Stations", station_count)
+        st.info(
+            f"🕐 Predictions generated at: "
+            f"{pd.to_datetime(prediction_timestamp).strftime('%Y-%m-%d %H:%M:%S')}"
+        )
 
-            # Debug information for historical data
-            if df_historical is None:
-                st.info("ℹ️ No historical data available in API response")
-            elif df_historical.empty:
-                st.info("ℹ️ Historical data DataFrame is empty after processing")
-            else:
-                # Show historical data summary
-                hist_pollutants = df_historical["pollutant"].unique()
-                hist_stations = (
-                    df_historical["station"].unique()
-                    if "station" in df_historical.columns
-                    else []
-                )
-                st.success(
-                    f"✅ Historical data loaded: {len(hist_pollutants)} pollutants, {len(hist_stations)} stations"
-                )
+        # print("Predictions Data:", predictions)
+        # print("Historical Data:", historical_data)
+        df_predictions = self.parse_dict_to_df(predictions)
 
-            # Visualization options
+        df_historical = self.parse_dict_to_df(historical_data)
+
+        if df_historical is None:
+            st.info("ℹ️ No historical data available in API response")
+        elif df_historical.empty:
+            st.info("ℹ️ Historical data DataFrame is empty after processing")
+        else:
+            hist_pollutants = df_historical["pollutant"].unique()
+            hist_stations = (
+                df_historical["station"].unique()
+                if "station" in df_historical.columns
+                else []
+            )
+            st.success(
+                f"✅ Historical data loaded: "
+                f"{len(hist_pollutants)} pollutants, "
+                f"{len(hist_stations)} stations"
+            )
+
+        # try:
+        #     # Parse predictions into DataFrame
+        #     predicted_data = []
+        #     for pollutant_station_key, hourly_data in predictions.items():
+        #         # Parse pollutant and station from the key (format: "Pollutant_Station")
+        #         if "_" in pollutant_station_key:
+        #             parts = pollutant_station_key.split(
+        #                 "_", 1
+        #             )  # Split only on first underscore
+        #             pollutant = parts[0]
+        #             station = parts[1]
+        #         else:
+        #             # Fallback if format is different
+        #             pollutant = pollutant_station_key
+        #             station = "Unknown Station"
+
+        #         for hour_key, prediction_info in hourly_data.items():
+        #             predicted_data.append(
+        #                 {
+        #                     "timestamp": prediction_info["timestamp"],
+        #                     "pollutant": pollutant,
+        #                     "value": prediction_info["value"],
+        #                     "hour": hour_key,
+        #                     "station": station,
+        #                 }
+        #             )
+
+        #     df_predictions = pd.DataFrame(predicted_data)
+
+        #     # Parse historical data into DataFrame
+        #     df_historical = None
+        #     if historical_data:
+        #         historical_parsed = []
+        #         for pollutant_station_key, data_points in historical_data.items():
+        #             # Parse pollutant and station from the key
+        #             if "_" in pollutant_station_key:
+        #                 parts = pollutant_station_key.split("_", 1)
+        #                 pollutant = parts[0]
+        #                 station = parts[1]
+        #             else:
+        #                 # If no station in key, this might be historical data without station names
+        #                 pollutant = pollutant_station_key
+        #                 # Try to infer station from prediction data structure
+        #                 station = "Helsinki Kallio 2"  # Default to first station
+
+        #             for data_point in data_points:
+        #                 historical_parsed.append(
+        #                     {
+        #                         "timestamp": data_point["timestamp"],
+        #                         "pollutant": pollutant,
+        #                         "value": data_point["value"],
+        #                         "station": station,
+        #                     }
+        #                 )
+
+        #         if historical_parsed:
+        #             df_historical = pd.DataFrame(historical_parsed)
+        #             # Fix timestamp conversion with error handling
+        #             try:
+        #                 df_historical["timestamp"] = pd.to_datetime(
+        #                     df_historical["timestamp"], errors="coerce"
+        #                 )
+        #                 # Remove any rows with invalid timestamps
+        #                 df_historical = df_historical.dropna(subset=["timestamp"])
+        #             except Exception as e:
+        #                 st.warning(f"Issue with historical timestamp conversion: {e}")
+        #                 df_historical = None
+
+        #     if df_predictions.empty:
+        #         st.error("No prediction data to plot")
+        #         return
+
+        #     # Convert timestamp to datetime with error handling
+        #     try:
+        #         df_predictions["timestamp"] = pd.to_datetime(
+        #             df_predictions["timestamp"], errors="coerce"
+        #         )
+        #         # Remove any rows with invalid timestamps
+        #         df_predictions = df_predictions.dropna(subset=["timestamp"])
+        #         df_predictions = df_predictions.sort_values("timestamp")
+        #     except Exception as e:
+        #         st.error(f"Error converting prediction timestamps: {e}")
+        #         return
+
+        #     if df_predictions.empty:
+        #         st.error("No valid prediction data after timestamp conversion")
+        #         return
+
+        # Show overview
+
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            historical_count = len(df_historical) if df_historical is not None else 0
+            st.metric("📈 Historical Points", historical_count)
+        with col2:
+            predicted_count = len(df_predictions)
+            st.metric("🔮 Predicted Points", predicted_count)
+        with col3:
+            pollutant_count = df_predictions["pollutant"].nunique()
+            st.metric("🌫️ Pollutants", pollutant_count)
+        with col4:
+            station_count = (
+                df_predictions["station"].nunique()
+                if "station" in df_predictions.columns
+                else 1
+            )
+            st.metric("🏢 Stations", station_count)
+
+        # Debug information for historical data
+        # Visualization options
+
+        try:
             viz_option = st.selectbox(
                 "Choose visualization:",
                 ["Combined View", "By Pollutant", "Comparison View"],
@@ -744,7 +839,7 @@ class AirPollutionDashboard:
             else:
                 self.plot_comparison_view_separate(df_predictions, df_historical)
 
-        except Exception as e:
+        except (KeyError, TypeError, ValueError) as e:
             st.error(f"Error plotting predictions: {e}")
             with st.expander("🔍 Debug Information"):
                 st.write("Exception details:", str(e))

@@ -157,7 +157,7 @@ python -m src.api.app
 streamlit run src/frontend/dashboard_simplified.py
 mlflow server --backend-store-uri ./mlruns --default-artifact-root s3://<s3_name>/artifacts --host 0.0.0.0 --port 5000
 python -m src.models.train
-python -m src.models.prediction
+python -m src.models.predict
 ```
 
 - **Dashboard:** http://localhost:8501
